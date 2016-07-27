@@ -20,6 +20,19 @@ var getFromApi = function(endpoint, args) {
     return emitter;
 };
 
+// Function for getting top tracks:
+var getTopTracks = function(artist, cb) {
+    unirest.get('https://api.spotify.com/v1/artists/' + artist.id + '/top-tracks?country=US')
+        .end(function(response) {
+           if (!response.error) {
+               artist.tracks = response.body.tracks;
+               cb();
+           } else {
+               cb(response.error);
+           }
+        });
+};
+
 // Creating endpoints with express
 app.get('/search/:name', function(req, res) {
     var searchReq = getFromApi('search', {
@@ -35,8 +48,28 @@ app.get('/search/:name', function(req, res) {
         var relatedSearchReq = getFromApi('artists/' + artist.id + '/related-artists/');
         relatedSearchReq.on('end', function(item) {
             artist.related = item.artists;
-            res.json(artist);
-        });
+            var relatedArtistsCount = artist.related.length;
+            var curr = 0;
+            
+            var checkComplete = function() {
+                if (curr === relatedArtistsCount) {
+                     res.json(artist);
+                }
+            };
+            
+            artist.related.forEach(function(artist) {
+                getTopTracks(artist, function(err) {
+                    if (err) {
+                        res.sendStatus(404);
+                        
+                    }
+                    curr += 1;
+                    checkComplete();
+                    
+                });
+                
+            });
+          });
         
         relatedSearchReq.on('error', function(code) {
             res.sendStatus(code);
